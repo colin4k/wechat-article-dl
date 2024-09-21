@@ -30,5 +30,5 @@ file:///Users/colin/Downloads/xxx/xx2/index.html
 ![example](./img/example.png)
 
 ## 致谢
-https://github.com/Cygra/wechat-article-dl
-https://github.com/jooooock/wechat-article-exporter
++ [Cygra/wechat-article-dl](https://github.com/Cygra/wechat-article-dl)
++ [wechat-article-exporter](https://github.com/jooooock/wechat-article-exporter)
