@@ -31,4 +31,4 @@ file:///Users/colin/Downloads/xxx/xx2/index.html
 
 ## 致谢
 + [Cygra/wechat-article-dl](https://github.com/Cygra/wechat-article-dl)
-+ [wechat-article-exporter](https://github.com/jooooock/wechat-article-exporter)
++ [jooooock/wechat-article-exporter](https://github.com/jooooock/wechat-article-exporter)
