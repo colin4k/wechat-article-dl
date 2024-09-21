@@ -10,6 +10,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "puppeteer": "^13.7.0"
+    "glob": "9",
+    "puppeteer": "^23.4.0",
+    "rimraf": "4"
   }
 }
