@@ -14,20 +14,21 @@
 # 安装依赖
 npm i
 
-# 执行 `node index.js [公众号文章链接]`
-node index.js https://mp.weixin.qq.com/s/AnCv3WLmMGJPn5MAjqwC6g
+# 执行 `node multi.js [公众号文章链接清单文件]`
+node multi.js -inputfile ~/Downloads/list.txt  -dir destdir
 ```
 
-执行完成后，会生成 `output/[文章名].png`。
+执行完成后，会生成 `output/distdir/[文章标题].pdf`
+
+## 文章链接清单文件范例
+```bash
+# 这些文件通过 wechat-article-exporter 导出
+file:///Users/colin/Downloads/xxx/xx1/index.html
+file:///Users/colin/Downloads/xxx/xx2/index.html
+```
 
 ![example](./img/example.png)
 
 ## 致谢
-
-Stand Up For Shanghai!
-
-## TODO
-
-- [ ] telegram 机器人
-- [ ] serverless
-- [ ] 处理文章中的视频
+https://github.com/Cygra/wechat-article-dl
+https://github.com/jooooock/wechat-article-exporter
