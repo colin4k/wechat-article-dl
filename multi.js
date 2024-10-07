@@ -7,7 +7,7 @@ let argError = false;
 let dir='output/'
 let usage = `
 Usage:
-node multi.js [-help] <[-inputfile <file path>]|[-url <[url1][,url2]...[,urln]>]>
+node multi.js [-help] <[-inputfile <file path>]|[-url <[url1][,url2]...[,urln]>]> <[-dir <dir path>]>
 -help : Print command help information.
 -inputfile <file path> : Specify a filename which contains urls need to be exported.
 -url <[url1][,url2]...[,urln]>] : Specify one or more URLs which need to be exported, each URL will be separated by ','. 
@@ -118,6 +118,11 @@ const autoScroll = async (page) => {
     }
     for (let j = 0; j < URLS.length; j++) {
       const url = URLS[j];
+
+      if (url === '') {
+        console.log("[" + (j + 1) + "/" + total + "] 跳过空URL")
+        continue;
+      }
       
       console.log("[" + (j + 1) + "/" + total + "] Exporting: " + url)
  
