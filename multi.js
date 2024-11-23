@@ -1,5 +1,6 @@
 const puppeteer = require("puppeteer");
-const SELECTOR = "#js_article > div";
+//const SELECTOR = "#js_article > div";
+const SELECTOR = "#vuepress-theme-blog__post-layout";
 const fs = require('fs')
 let InputFile = null
 let URLS = []

@@ -1,2 +1,8 @@
 node_modules
 output/*.png
+output/*.pdf
+output/*/*.pdf
+npminstall-debug.log
+pnpm-lock.yaml
+output/.DS_Store
+.DS_Store
