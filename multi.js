@@ -2,6 +2,7 @@ const puppeteer = require("puppeteer");
 //for wechat const SELECTOR = "#page-content > div";
 const SELECTOR = ".widget-article";
 const fs = require('fs')
+const path = require('path')
 let InputFile = null
 let URLS = []
 let argError = false;
@@ -23,6 +24,36 @@ node multi.js -url D:\\urls.txt -type markdown
 String.prototype.replaceAll = function(s1, s2) {
 	return this.replace(new RegExp(s1, "gm"), s2);
 }
+
+// 获取当前日期字符串，格式：YYYY-MM-DD
+const getCurrentDate = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+// 记录错误URL到日志文件
+const logError = (url) => {
+  try {
+    const logFileName = `error-${getCurrentDate()}.log`;
+    // 使用绝对路径
+    const logDir = path.join(process.cwd(), 'logs');
+    console.log('日志目录路径:', logDir);
+    
+    // 确保目录存在
+    if (!fs.existsSync(logDir)) {
+      console.log('创建日志目录...');
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    
+    // 写入日志文件
+    const logFilePath = path.join(logDir, logFileName);
+    console.log('日志文件路径:', logFilePath);
+    fs.appendFileSync(logFilePath, url + '\n');
+    console.log(`\n\u26A0 错误已记录到 ${logFilePath}`);
+  } catch (err) {
+    console.error(err);
+  }
+};
 
 for (let j = 0; j < process.argv.length; j++) {
   if (process.argv[j] == '-help') {
@@ -238,6 +269,8 @@ const autoScroll = async (page) => {
 
         console.log(`\n\uD83C\uDF7B${filePath} generated!`);
       }catch (error) {
+        // 记录错误的URL到日志文件
+        logError(url);
         console.error("[" + (j + 1) + "/" + total + "] Exporting:" + url + " failed")
         console.error(error)
       }

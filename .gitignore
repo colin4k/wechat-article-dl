@@ -6,3 +6,4 @@ npminstall-debug.log
 pnpm-lock.yaml
 output/.DS_Store
 .DS_Store
+*.log
