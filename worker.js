@@ -42,7 +42,7 @@ const autoScroll = async (page) => {
 
 async function processUrl(page, url, index, total, outputType, dir) {
   try {
-    console.log(`[${index + 1}/${total}] Exporting: ${url}`);
+    console.log(`[${index + 1}/${total}] 正在导出: ${url}`);
 
     if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) {
       const fileUrl = `file://${url.startsWith('/') ? url : require('path').resolve(process.cwd(), url)}`;
@@ -58,7 +58,7 @@ async function processUrl(page, url, index, total, outputType, dir) {
       }
     });
 
-    console.log("\u26FDStart to generate!");
+    console.log("\u26FD开始生成文件!");
 
     await autoScroll(page);
     await page.waitForSelector(SELECTOR);
@@ -136,10 +136,11 @@ async function processUrl(page, url, index, total, outputType, dir) {
         await newPage.close();
     }
 
-    console.log(`\n\uD83C\uDF7B${filePath} generated!`);
-    parentPort.postMessage({ success: true, url, filePath });
+    console.log(`\n\uD83C\uDF7B${filePath} 生成完成!`);
+    return { success: true, url, filePath };
   } catch (error) {
-    parentPort.postMessage({ success: false, url, error: error.message });
+    console.error(`\n\u26A0 处理失败: ${url} - ${error.message}`);
+    return { success: false, url, error: error.message };
   }
 }
 
@@ -152,6 +153,8 @@ if (require.main === module) {
 
   const { urls, outputType, dir, startIndex, total } = workerData;
   
+  console.log(`Worker 启动，处理 ${urls.length} 个URL`);
+  
   // 创建一个浏览器实例处理所有 URL
   (async () => {
     const browser = await puppeteer.launch();
@@ -160,12 +163,15 @@ if (require.main === module) {
     try {
       // 串行处理该 worker 负责的所有 URL
       for (let i = 0; i < urls.length; i++) {
-        await processUrl(page, urls[i], startIndex + i, total, outputType, dir);
+        const result = await processUrl(page, urls[i], startIndex + i, total, outputType, dir);
+        // 立即发送结果到主进程
+        parentPort.postMessage(result);
       }
     } catch (error) {
       console.error('Worker 处理失败:', error);
     } finally {
       await browser.close();
+      console.log('Worker 完成所有任务');
     }
   })().catch(error => {
     console.error('Worker 初始化失败:', error);
