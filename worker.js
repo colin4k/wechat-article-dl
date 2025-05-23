@@ -6,12 +6,14 @@ const path = require('path');
 const SELECTOR = ".widget-article";
 
 const logProcess = (percent) => {
-  const completed = Math.min(Math.floor(percent * 40), 40);
+  // 确保进度值在0-1之间
+  const validPercent = Math.max(0, Math.min(1, percent));
+  const completed = Math.floor(validPercent * 40);
+  const remaining = 40 - completed;
+  
   process.stdout.write("\r\x1b[K");
   process.stdout.write(
-    `\uD83D\uDEA7[${Array(completed).fill("=").join("")}${Array(40 - completed)
-      .fill("-")
-      .join("")}]`
+    `\uD83D\uDEA7[${"=".repeat(completed)}${"-".repeat(remaining)}] ${(validPercent * 100).toFixed(1)}%`
   );
 };
 
@@ -20,21 +22,37 @@ const autoScroll = async (page) => {
     await new Promise((resolve) => {
       const STEP = 200;
       const TIME_INTERVAL = 200;
-
       let totalHeight = 0;
+      let lastHeight = 0;
+      let scrollAttempts = 0;
+      const MAX_ATTEMPTS = 50; // 最大滚动尝试次数
 
       const timer = setInterval(() => {
-        const totalDistance = document.body.scrollHeight - window.innerHeight;
+        const scrollHeight = document.body.scrollHeight;
+        const viewportHeight = window.innerHeight;
+        const totalDistance = scrollHeight - viewportHeight;
+        
+        // 如果已经滚动到底部或达到最大尝试次数，则停止
+        if (totalHeight >= totalDistance || scrollAttempts >= MAX_ATTEMPTS) {
+          clearInterval(timer);
+          resolve();
+          return;
+        }
+
+        // 检查是否真的在滚动
+        if (lastHeight === scrollHeight) {
+          scrollAttempts++;
+        } else {
+          scrollAttempts = 0;
+          lastHeight = scrollHeight;
+        }
 
         window.scrollBy(0, STEP);
         totalHeight += STEP;
 
-        console.log("progress", totalHeight / totalDistance);
-
-        if (totalHeight >= totalDistance) {
-          clearInterval(timer);
-          resolve();
-        }
+        // 计算并发送进度
+        const progress = Math.min(totalHeight / totalDistance, 1);
+        console.log("progress", progress);
       }, TIME_INTERVAL);
     });
   });
@@ -42,28 +60,40 @@ const autoScroll = async (page) => {
 
 async function processUrl(page, url, index, total, outputType, dir) {
   try {
-    console.log(`[${index + 1}/${total}] 正在导出: ${url}`);
+    console.log(`\n[${index + 1}/${total}] 正在导出: ${url}`);
 
     if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) {
       const fileUrl = `file://${url.startsWith('/') ? url : require('path').resolve(process.cwd(), url)}`;
-      await page.goto(fileUrl);
+      await page.goto(fileUrl, { waitUntil: 'networkidle0', timeout: 30000 });
     } else {
-      await page.goto(url);
+      await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
     }
 
+    // 设置控制台消息监听器
     page.on("console", (consoleObj) => {
       const content = consoleObj.text();
       if (content.startsWith("progress")) {
-        logProcess(Number(consoleObj.text().split("progress ")[1]));
+        try {
+          const progress = parseFloat(content.split("progress ")[1]);
+          if (!isNaN(progress)) {
+            logProcess(progress);
+          }
+        } catch (err) {
+          // 忽略解析错误
+        }
       }
     });
 
     console.log("\u26FD开始生成文件!");
 
     await autoScroll(page);
-    await page.waitForSelector(SELECTOR);
+    await page.waitForSelector(SELECTOR, { timeout: 10000 });
 
     const element = await page.$(SELECTOR);
+    if (!element) {
+      throw new Error('未找到文章内容');
+    }
+
     await element.evaluate((el) => (el.style.padding = "16px"));
 
     const title = await (await page.title()).replaceAll('？','').replaceAll('/','、').replaceAll(' ','');
@@ -157,7 +187,10 @@ if (require.main === module) {
   
   // 创建一个浏览器实例处理所有 URL
   (async () => {
-    const browser = await puppeteer.launch();
+    const browser = await puppeteer.launch({
+      headless: "new",
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
     const page = await browser.newPage();
     
     try {
