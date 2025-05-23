@@ -1,6 +1,5 @@
 const puppeteer = require("puppeteer");
-//for wechat const SELECTOR = "#page-content > div";
-const SELECTOR = ".widget-article";
+const { Worker } = require('worker_threads');
 const fs = require('fs')
 const path = require('path')
 let InputFile = null
@@ -8,6 +7,7 @@ let URLS = []
 let argError = false;
 let dir='output/'
 let outputType = 'pdf' // 默认输出类型为pdf
+let threadCount = 1; // 默认线程数为1
 let usage = `
 Usage:
 node multi.js [-help] <[-inputfile <file path>]|[-url <[url1][,url2]...[,urln]>]>
@@ -15,10 +15,12 @@ node multi.js [-help] <[-inputfile <file path>]|[-url <[url1][,url2]...[,urln]>]
 -inputfile <file path> : Specify a filename which contains urls need to be exported.
 -url <[url1][,url2]...[,urln]>] : Specify one or more URLs which need to be exported, each URL will be separated by ','. 
 -type <pdf|markdown|html> : Specify the output format type, default is pdf.
+--threads <number> : Specify the number of threads to use, default is 1.
 Examples:
 node multi.js -inputfile D:\\urls.txt
 node multi.js -url D:\\urls.txt
 node multi.js -url D:\\urls.txt -type markdown
+node multi.js -url D:\\urls.txt --threads 4
 `
 
 String.prototype.replaceAll = function(s1, s2) {
@@ -35,17 +37,14 @@ const getCurrentDate = () => {
 const logError = (url) => {
   try {
     const logFileName = `error-${getCurrentDate()}.log`;
-    // 使用绝对路径
     const logDir = path.join(process.cwd(), 'logs');
     console.log('日志目录路径:', logDir);
     
-    // 确保目录存在
     if (!fs.existsSync(logDir)) {
       console.log('创建日志目录...');
       fs.mkdirSync(logDir, { recursive: true });
     }
     
-    // 写入日志文件
     const logFilePath = path.join(logDir, logFileName);
     console.log('日志文件路径:', logFilePath);
     fs.appendFileSync(logFilePath, url + '\n');
@@ -59,6 +58,17 @@ for (let j = 0; j < process.argv.length; j++) {
   if (process.argv[j] == '-help') {
     argError = true;
     break;
+  }
+  if (process.argv[j] == '--threads') {
+    if (j + 1 < process.argv.length) {
+      const threads = parseInt(process.argv[j + 1]);
+      if (isNaN(threads) || threads < 1) {
+        console.error('线程数必须是大于0的整数');
+        argError = true;
+        break;
+      }
+      threadCount = threads;
+    }
   }
   if (process.argv[j] == '-dir'){
     dir=dir+process.argv[j+1]+'/'
@@ -149,134 +159,87 @@ const autoScroll = async (page) => {
   });
 };
 
+// 创建并管理worker线程
+async function processUrlsWithWorkers(urls) {
+  const total = urls.length;
+  console.log(`开始导出 ${outputType.toUpperCase()} 文件 [${total}]，使用 ${threadCount} 个线程`);
+
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  const chunks = [];
+  const chunkSize = Math.ceil(urls.length / threadCount);
+  
+  // 将URLs分成多个块
+  for (let i = 0; i < urls.length; i += chunkSize) {
+    chunks.push(urls.slice(i, i + chunkSize));
+  }
+
+  const workers = [];
+  const results = [];
+  let completedCount = 0;
+
+  // 为每个块创建一个worker
+  for (let i = 0; i < chunks.length; i++) {
+    const worker = new Worker('./worker.js', {
+      workerData: {
+        urls: chunks[i],
+        outputType,
+        dir,
+        startIndex: i * chunkSize,
+        total
+      }
+    });
+    
+    workers.push(worker);
+
+    worker.on('message', (result) => {
+      completedCount++;
+      if (!result.success) {
+        logError(result.url);
+        console.error(`导出失败: ${result.url}`);
+        console.error(result.error);
+      }
+      results.push(result);
+      
+      // 显示总体进度
+      const progress = (completedCount / total * 100).toFixed(1);
+      console.log(`\n总进度: ${progress}% (${completedCount}/${total})`);
+    });
+
+    worker.on('error', (error) => {
+      console.error(`Worker ${i + 1} 发生错误:`, error);
+      completedCount++;
+    });
+
+    worker.on('exit', (code) => {
+      if (code !== 0) {
+        console.error(`Worker ${i + 1} 异常退出，退出码: ${code}`);
+      }
+    });
+  }
+
+  // 等待所有worker完成
+  await Promise.all(workers.map(worker => {
+    return new Promise((resolve) => {
+      worker.on('exit', resolve);
+    });
+  }));
+
+  // 统计结果
+  const successCount = results.filter(r => r.success).length;
+  const failCount = results.filter(r => !r.success).length;
+  
+  console.log(`\n导出完成！成功: ${successCount}，失败: ${failCount}`);
+  console.log(`所有页面已导出为 ${outputType.toUpperCase()}`);
+}
+
+// 主函数
 (async () => {
   try {
-    const browser = await puppeteer.launch();
-    const total = URLS.length;
-    console.log(`Start to exporting ${outputType.toUpperCase()} files [${total}]`)
-
-    const page = await browser.newPage();
-    
-    if (!fs.existsSync(dir)){
-      fs.mkdir(dir,(err)=>{
-          if(err){
-            console.log('创建目录${dir}出错')
-          }else{
-            //console.log('未出错')
-          }
-        })
-    }
-    for (let j = 0; j < URLS.length; j++) {
-      const url = URLS[j];
-      
-      console.log("[" + (j + 1) + "/" + total + "] Exporting: " + url)
- 
-      try {
-        // 检查是否是本地文件路径
-        if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) {
-          // 转换为文件URL格式
-          const fileUrl = `file://${url.startsWith('/') ? url : require('path').resolve(process.cwd(), url)}`;
-          await page.goto(fileUrl);
-        } else {
-          await page.goto(url);
-        }
-        page.on("console", (consoleObj) => {
-          const content = consoleObj.text();
-          if (content.startsWith("progress")) {
-            logProcess(Number(consoleObj.text().split("progress ")[1]));
-          }
-        });
-
-        console.log("\u26FDStart to generate!");
-
-        await autoScroll(page);
-
-        await page.waitForSelector(SELECTOR);
-
-        const element = await page.$(SELECTOR);
-        await element.evaluate((el) => (el.style.padding = "16px"));
-
-        const title = await (await page.title()).replaceAll('？','').replaceAll('/','、').replaceAll(' ','');
-        let filePath;
-        
-        switch(outputType) {
-          case 'markdown':
-            const content = await page.evaluate(() => {
-              return element ? element.innerText : '';
-            });
-            filePath = `${dir}${title}.md`;
-            fs.writeFileSync(filePath, content);
-            break;
-          case 'html':
-            const htmlContent = await page.evaluate(() => {
-              return element ? element.outerHTML : '';
-            });
-            filePath = `${dir}${title}.html`;
-            fs.writeFileSync(filePath, htmlContent);
-            break;
-          default: // pdf
-            filePath = `${dir}${title}.pdf`;
-            // 创建一个新的临时页面来只包含目标内容
-            const newPage = await browser.newPage();
-            const html = await page.evaluate((selector) => {
-              const element = document.querySelector(selector);
-              if (!element) return '';
-              return `
-                <!DOCTYPE html>
-                <html>
-                  <head>
-                    <meta charset="UTF-8">
-                    <style>
-                      body { 
-                        margin: 0; 
-                        padding: 20px;
-                        width: 100%;
-                      }
-                      .content { 
-                        max-width: 100%;
-                        width: 100%;
-                      }
-                      img {
-                        max-width: 100%;
-                        height: auto;
-                        display: block;
-                      }
-                    </style>
-                  </head>
-                  <body>
-                    <div class="content">${element.outerHTML}</div>
-                  </body>
-                </html>
-              `;
-            }, SELECTOR);
-            
-            await newPage.setContent(html);
-            await newPage.pdf({
-              path: filePath,
-              format: 'A4',
-              printBackground: true,
-              margin: {
-                top: '20px',
-                right: '20px',
-                bottom: '20px',
-                left: '20px'
-              },
-              preferCSSPageSize: true,
-              scale: 0.9
-            });
-            await newPage.close();
-        }
-
-        console.log(`\n\uD83C\uDF7B${filePath} generated!`);
-      }catch (error) {
-        // 记录错误的URL到日志文件
-        logError(url);
-        console.error("[" + (j + 1) + "/" + total + "] Exporting:" + url + " failed")
-        console.error(error)
-      }
-    }
-    await browser.close();
-    console.log(`Exported all pages as ${outputType.toUpperCase()}.`)
+    await processUrlsWithWorkers(URLS);
   } catch (error) {
+    console.error('发生错误:', error);
   }
 })();
