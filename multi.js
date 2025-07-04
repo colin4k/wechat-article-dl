@@ -9,6 +9,7 @@ let dir='output/'
 let outputType = 'pdf' // 默认输出类型为pdf
 let threadCount = 1; // 默认线程数为1
 let restoreMode = false; // 是否为恢复模式
+let selector = 'html'; // 默认选择器
 let usage = `
 Usage:
 node multi.js [-help] <[-inputfile <file path>]|[-url <[url1][,url2]...[,urln]>]>
@@ -18,11 +19,13 @@ node multi.js [-help] <[-inputfile <file path>]|[-url <[url1][,url2]...[,urln]>]
 -type <pdf|markdown|html> : Specify the output format type, default is pdf.
 --threads <number> : Specify the number of threads to use, default is 1.
 --restore : Restore from previous progress and continue processing.
+-selector <css selector> : Specify the CSS selector for content extraction, default is 'html'.
 Examples:
 node multi.js -inputfile D:\\urls.txt
 node multi.js -url D:\\urls.txt
 node multi.js -url D:\\urls.txt -type markdown
 node multi.js -url D:\\urls.txt --threads 4
+node multi.js -selector ".widget-article"
 node multi.js --restore
 `
 
@@ -126,6 +129,15 @@ for (let j = 0; j < process.argv.length; j++) {
       }
     }
   }
+  if (process.argv[j] == '-selector') {
+    if (j + 1 < process.argv.length) {
+      selector = process.argv[j + 1];
+    } else {
+      console.error('Missing selector value');
+      argError = true;
+      break;
+    }
+  }
   if (process.argv[j] == '-inputfile' || process.argv[j] == '-url') {
     if (j + 1 < process.argv.length) {
       if (process.argv[j] == '-inputfile') {
@@ -164,8 +176,9 @@ if (restoreMode) {
   outputType = progressData.outputType;
   dir = progressData.dir;
   threadCount = progressData.threadCount;
+  selector = progressData.selector || 'html'; // 兼容旧的进度文件
   
-  console.log(`恢复配置: 输出类型=${outputType}, 目录=${dir}, 线程数=${threadCount}`);
+  console.log(`恢复配置: 输出类型=${outputType}, 目录=${dir}, 线程数=${threadCount}, 选择器=${selector}`);
   console.log(`待处理URL数量: ${URLS.length}`);
 } else {
   if (argError || (InputFile == null && URLS.length == 0)) {
@@ -253,6 +266,7 @@ async function processUrlsWithWorkers(urls) {
       outputType: outputType,
       dir: dir,
       threadCount: threadCount,
+      selector: selector,
       startTime: new Date().toISOString(),
       workerProgress: chunks.map((chunk, index) => ({
         workerId: index,
@@ -301,6 +315,7 @@ async function processUrlsWithWorkers(urls) {
         urls: remainingUrls,
         outputType,
         dir,
+        selector,
         startIndex: workerProgress.startIndex,
         total
       }

@@ -3,8 +3,6 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 
-const SELECTOR = ".widget-article";
-
 const logProcess = (percent) => {
   // 确保进度值在0-1之间
   const validPercent = Math.max(0, Math.min(1, percent));
@@ -58,7 +56,7 @@ const autoScroll = async (page) => {
   });
 };
 
-async function processUrl(page, url, index, total, outputType, dir) {
+async function processUrl(page, url, index, total, outputType, dir, selector) {
   try {
     console.log(`\n[${index + 1}/${total}] 正在导出: ${url}`);
 
@@ -87,11 +85,11 @@ async function processUrl(page, url, index, total, outputType, dir) {
     console.log("\u26FD开始生成文件!");
 
     await autoScroll(page);
-    await page.waitForSelector(SELECTOR, { timeout: 10000 });
+    await page.waitForSelector(selector, { timeout: 10000 });
 
-    const element = await page.$(SELECTOR);
+    const element = await page.$(selector);
     if (!element) {
-      throw new Error('未找到文章内容');
+      throw new Error(`未找到选择器 "${selector}" 对应的内容`);
     }
 
     await element.evaluate((el) => (el.style.padding = "16px"));
@@ -147,7 +145,7 @@ async function processUrl(page, url, index, total, outputType, dir) {
               </body>
             </html>
           `;
-        }, SELECTOR);
+        }, selector);
         
         await newPage.setContent(html);
         await newPage.pdf({
@@ -181,9 +179,9 @@ if (require.main === module) {
     process.exit(1);
   }
 
-  const { urls, outputType, dir, startIndex, total } = workerData;
+  const { urls, outputType, dir, selector = 'html', startIndex, total } = workerData;
   
-  console.log(`Worker 启动，处理 ${urls.length} 个URL`);
+  console.log(`Worker 启动，处理 ${urls.length} 个URL，使用选择器: ${selector}`);
   
   // 创建一个浏览器实例处理所有 URL
   (async () => {
@@ -196,7 +194,7 @@ if (require.main === module) {
     try {
       // 串行处理该 worker 负责的所有 URL
       for (let i = 0; i < urls.length; i++) {
-        const result = await processUrl(page, urls[i], startIndex + i, total, outputType, dir);
+        const result = await processUrl(page, urls[i], startIndex + i, total, outputType, dir, selector);
         // 立即发送结果到主进程
         parentPort.postMessage(result);
       }

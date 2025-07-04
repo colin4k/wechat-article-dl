@@ -20,6 +20,9 @@ node multi.js -url "https://mp.weixin.qq.com/s/example1,https://mp.weixin.qq.com
 
 # 指定输出格式
 node multi.js -inputfile test_urls.txt -type markdown --threads 3
+
+# 指定CSS选择器
+node multi.js -inputfile test_urls.txt -selector ".widget-article" --threads 2
 ```
 
 ### 2. 断点续跑
@@ -41,6 +44,7 @@ node multi.js --restore
   "outputType": "pdf",
   "dir": "output/",
   "threadCount": 4,
+  "selector": ".widget-article",
   "startTime": "2024-01-01T10:00:00.000Z",
   "workerProgress": [
     {
@@ -109,11 +113,13 @@ node multi.js [-help] <[-inputfile <file path>]|[-url <[url1][,url2]...[,urln]>]
 -type <pdf|markdown|html> : Specify the output format type, default is pdf.
 --threads <number> : Specify the number of threads to use, default is 1.
 --restore : Restore from previous progress and continue processing.
+-selector <css selector> : Specify the CSS selector for content extraction, default is 'html'.
 
 Examples:
 node multi.js -inputfile D:\urls.txt
 node multi.js -url D:\urls.txt
 node multi.js -url D:\urls.txt -type markdown
 node multi.js -url D:\urls.txt --threads 4
+node multi.js -selector ".widget-article"
 node multi.js --restore
 ``` 
